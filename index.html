@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Blueprint Generator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="toolApp">
+
+  <header class="toolTopBar">
+    <h1 class="toolTitle">Blueprint Generator</h1>
+    <button id="btnUploadTop" class="toolAction">New Image</button>
+  </header>
+
+  <main class="toolView">
+
+    <!-- ============ CANVAS AREA ============ -->
+    <section id="canvasArea">
+
+      <div id="emptyState">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+        <button id="btnChooseImage" class="bigAction">Upload Image</button>
+        <p class="hint">Tap to pick a photo to blueprint</p>
+      </div>
+
+      <div id="previewWrap" class="hidden">
+        <canvas id="blueprintCanvas"></canvas>
+        <div id="canvasHint">Pick a tool below, then trace elements on the image</div>
+      </div>
+
+    </section>
+
+    <!-- ============ TOOLBAR ============ -->
+    <section id="toolbar" class="hidden">
+      <button class="toolBtn active" id="toolSelect"  data-tool="select">  Select</button>
+      <button class="toolBtn"        id="toolRect"    data-tool="rect">    Rectangle</button>
+      <button class="toolBtn"        id="toolLine"    data-tool="line">    Line</button>
+      <button class="toolBtn"        id="toolPoint"   data-tool="point">   Point</button>
+    </section>
+
+    <!-- ============ CONTROLS ============ -->
+    <section id="controls">
+
+      <!-- ELEMENTS -->
+      <div class="group">
+        <div class="groupTitle">Elements</div>
+
+        <div id="elementList">
+          <div class="emptyList">No elements traced yet. Pick a tool above and trace the image.</div>
+        </div>
+
+        <div class="fieldRow btnRow">
+          <button id="btnAddElement" class="smallBtn">Add Manual</button>
+          <button id="btnDeleteElement" class="smallBtn">Delete Selected</button>
+          <button id="btnClearElements" class="smallBtn danger">Clear All</button>
+        </div>
+      </div>
+
+      <!-- CANVAS OPTIONS -->
+      <div class="group">
+        <div class="groupTitle">Canvas Options</div>
+
+        <div class="fieldRow">
+          <label for="lineColor">Blueprint Color</label>
+          <input type="color" id="lineColor" value="#7fe8ff">
+        </div>
+
+        <div class="sliderRow">
+          <div class="sliderTop">
+            <label for="lineWeight">Line Weight</label>
+            <span class="val" id="valLineWeight">2</span>
+          </div>
+          <input type="range" id="lineWeight" min="1" max="8" step="1" value="2">
+        </div>
+
+        <div class="fieldRow">
+          <label for="showGrid">Grid</label>
+          <select id="showGrid">
+            <option value="off">Off</option>
+            <option value="on" selected>On</option>
+          </select>
+        </div>
+
+        <div class="fieldRow">
+          <label for="gridSize">Grid Size</label>
+          <select id="gridSize">
+            <option value="20">Fine (20px)</option>
+            <option value="40" selected>Medium (40px)</option>
+            <option value="80">Coarse (80px)</option>
+            <option value="120">Very Coarse (120px)</option>
+          </select>
+        </div>
+
+        <div class="fieldRow">
+          <label for="imageOpacity">Image Opacity</label>
+          <select id="imageOpacity">
+            <option value="0">Hidden (pure blueprint)</option>
+            <option value="0.25">Faint</option>
+            <option value="0.5" selected>Half</option>
+            <option value="0.75">Strong</option>
+            <option value="1">Full</option>
+          </select>
+        </div>
+
+        <div class="fieldRow">
+          <label for="showLabels">Element Labels</label>
+          <select id="showLabels">
+            <option value="on" selected>On</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+
+        <div class="fieldRow">
+          <label for="showDimensions">Dimension Lines</label>
+          <select id="showDimensions">
+            <option value="on" selected>On</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- MANIFEST -->
+      <div class="group">
+        <div class="groupTitle">Manifest</div>
+
+        <div class="fieldRow">
+          <label for="projectName">Project Name</label>
+          <input type="text" id="projectName" value="untitled" placeholder="untitled">
+        </div>
+
+        <div class="manifestWrap">
+          <pre id="manifestPreview">Upload an image to begin.</pre>
+        </div>
+
+        <div class="fieldRow btnRow">
+          <button id="btnCopyManifest" class="smallBtn">Copy Manifest</button>
+          <button id="btnExportTxt" class="smallBtn">Save as .txt</button>
+        </div>
+      </div>
+
+      <!-- AI ANALYSIS -->
+      <div class="group">
+        <div class="groupTitle">AI Analysis (OpenRouter)</div>
+
+        <div class="fieldRow">
+          <label for="openrouterKey">API Key</label>
+          <input type="text" id="openrouterKey" placeholder="sk-or-…" autocomplete="off">
+        </div>
+
+        <div class="fieldRow btnRow">
+          <button id="btnSaveKey" class="smallBtn">Save Key</button>
+          <button id="btnClearKey" class="smallBtn danger">Clear</button>
+          <button id="btnRefreshModels" class="smallBtn">Refresh Models</button>
+        </div>
+
+        <div class="fieldRow">
+          <label for="modelList">Model</label>
+          <select id="modelList">
+            <option value="">Tap Refresh Models</option>
+          </select>
+        </div>
+
+        <div class="fieldRow btnRow">
+          <button id="btnAnalyse" class="smallBtn primary">Analyse Image</button>
+        </div>
+
+        <div class="aiResponseWrap">
+          <pre id="aiResponseText">No analysis yet.</pre>
+        </div>
+      </div>
+
+      <!-- EXPORT -->
+      <div class="group">
+        <div class="groupTitle">Export</div>
+
+        <div class="fieldRow">
+          <label for="exportScale">Image Quality</label>
+          <select id="exportScale">
+            <option value="1">1x (small)</option>
+            <option value="2" selected>2x (recommended)</option>
+            <option value="4">4x (high res)</option>
+          </select>
+        </div>
+
+        <div class="fieldRow">
+          <label for="exportName">Filename</label>
+          <input type="text" id="exportName" value="blueprint" placeholder="blueprint">
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ============ EXPORT BAR ============ -->
+  <footer class="exportBar">
+    <button id="btnExportPng" class="exportBtn primary">PNG</button>
+    <button id="btnExportJpg" class="exportBtn">JPG</button>
+    <button id="btnResetAll" class="exportBtn">Reset All</button>
+  </footer>
+
+</div>
+
+<script src="blueprint.js"></script>
+</body>
+</html>

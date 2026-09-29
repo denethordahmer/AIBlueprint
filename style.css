@@ -1,0 +1,422 @@
+/* =========================================================================
+   BLUEPRINT GENERATOR — style.css
+   Simplified version — no canvas, no toolbar, no element list.
+   Standalone. Self-contained. No shared base dependency.
+   ========================================================================= */
+
+:root{
+  --bg: #040912;
+  --bg-grad: radial-gradient(circle at 50% 0%, #0a1428 0%, #040912 70%);
+  --panel: #08111f;
+  --panel-2: #0c1829;
+  --panel-3: #132238;
+  --border: #1a2a44;
+  --border-strong: #263a5c;
+
+  --text: #e8eef5;
+  --text-dim: #8b9cb5;
+  --text-dimmer: #5a6b85;
+
+  --accent: #2a9fd6;
+  --accent-bright: #7fe8ff;
+  --accent-glow: #7fe8ff55;
+
+  --gold: #ffd257;
+  --danger: #ff5c6a;
+  --danger-dim: #ff5c6a44;
+  --success: #4ade80;
+
+  --radius: 12px;
+  --radius-lg: 16px;
+}
+
+*{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body{
+  margin: 0; padding: 0;
+  background: var(--bg);
+  background-image: var(--bg-grad);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  height: 100%;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea{
+  font-family: inherit;
+  font-size: inherit;
+}
+
+a{ color: inherit; text-decoration: none; }
+
+.hidden{ display: none !important; }
+
+/* ============ TOOL LAYOUT ============ */
+.toolApp{
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top) 12px 0 12px;
+  position: relative;
+}
+
+.toolTopBar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
+
+.toolTitle{
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolAction{
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.toolAction:hover{
+  background: var(--panel-3);
+  border-color: var(--accent);
+}
+
+.toolAction:active{ transform: scale(0.96); }
+
+.toolView{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
+}
+
+/* ============ IMAGE PICKER / PREVIEW ============ */
+#canvasArea{
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+  max-height: 55vh;
+  background: #020610;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#emptyState{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+#emptyState.hidden{ display: none; }
+
+.bigAction{
+  background: linear-gradient(135deg, var(--accent), var(--accent-bright));
+  border: none;
+  color: #040912;
+  border-radius: 12px;
+  padding: 16px 28px;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 0 8px 28px -10px var(--accent-glow);
+  transition: transform 0.08s ease;
+}
+
+.bigAction:active{ transform: scale(0.97); }
+
+.hint{
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+#previewWrap{
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+#previewWrap.hidden{ display: none; }
+
+#previewImg{
+  display: block;
+  max-width: 100%;
+  max-height: 45vh;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+#fileMeta{
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 8px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+/* ============ CONTROL GROUPS ============ */
+#controls{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+.group{
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.groupTitle{
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 800;
+  color: var(--accent-bright);
+  padding: 10px 14px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ============ FORM PRIMITIVES ============ */
+.fieldRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fieldRow:last-child{ border-bottom: none; }
+
+.fieldRow label{
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+
+.fieldRow select,
+.fieldRow input[type="text"],
+.fieldRow input[type="password"]{
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 60%;
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: ui-monospace, "Courier New", monospace;
+}
+
+.fieldRow select{
+  cursor: pointer;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 2px),
+    calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+  font-family: inherit;
+}
+
+.fieldRow select:focus,
+.fieldRow input[type="text"]:focus,
+.fieldRow input[type="password"]:focus{
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ============ BUTTON ROWS ============ */
+.btnRow{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btnRow label{ display: none; }
+
+.smallBtn{
+  flex: 1;
+  min-width: 90px;
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.smallBtn:hover{
+  background: var(--panel-2);
+  border-color: var(--accent);
+}
+
+.smallBtn:active{ transform: scale(0.96); }
+
+.smallBtn.danger{
+  color: var(--danger);
+  border-color: var(--danger-dim);
+  background: rgba(255, 92, 106, 0.08);
+}
+
+.smallBtn.danger:hover{
+  background: rgba(255, 92, 106, 0.16);
+  border-color: var(--danger);
+}
+
+.smallBtn.primary{
+  background: linear-gradient(135deg, var(--accent), var(--accent-bright));
+  color: #040912;
+  border-color: transparent;
+  box-shadow: 0 6px 20px -8px var(--accent-glow);
+}
+
+.smallBtn.primary:hover{
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+}
+
+.smallBtn:disabled{
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.bigWide{
+  flex: 1 1 100%;
+  min-width: 100%;
+  padding: 14px;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+}
+
+/* ============ STATUS LINE ============ */
+.statusLine{
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-bright);
+  background: var(--panel-2);
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.statusLine.hidden{ display: none; }
+
+.statusLine.error{
+  color: var(--danger);
+}
+
+.statusLine.success{
+  color: var(--success);
+}
+
+/* ============ MANIFEST OUTPUT ============ */
+.manifestWrap{
+  padding: 0 14px 10px;
+}
+
+#manifestPreview{
+  margin: 0;
+  padding: 12px;
+  background: #020610;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: ui-monospace, "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--accent-bright);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  min-height: 80px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============ SCROLLBARS ============ */
+.toolView::-webkit-scrollbar,
+#manifestPreview::-webkit-scrollbar{
+  width: 6px;
+}
+
+.toolView::-webkit-scrollbar-thumb,
+#manifestPreview::-webkit-scrollbar-thumb{
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+.toolView::-webkit-scrollbar-track,
+#manifestPreview::-webkit-scrollbar-track{
+  background: transparent;
+}
+
+/* ============ SMALL SCREENS ============ */
+@media (max-width: 380px){
+  .fieldRow label{ font-size: 12px; }
+  .fieldRow select,
+  .fieldRow input[type="text"],
+  .fieldRow input[type="password"]{ font-size: 12px; padding: 7px 8px; }
+  .toolTitle{ font-size: 16px; }
+  .toolAction{ padding: 7px 11px; font-size: 11px; }
+  #manifestPreview{ font-size: 10px; }
+}
