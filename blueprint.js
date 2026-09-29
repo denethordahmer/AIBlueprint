@@ -75,7 +75,9 @@
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
+    // FIX: Android often reports empty file.type — only reject if it's
+    // non-empty AND not an image.
+    if (file.type && !file.type.startsWith("image/")) {
       showStatus("That file is not an image.", "error");
       return;
     }
@@ -93,7 +95,9 @@
         const w = img.naturalWidth;
         const h = img.naturalHeight;
         const mb = (file.size / 1024 / 1024).toFixed(2);
-        const mime = (file.type.split("/")[1] || "unknown").toUpperCase();
+        const mime = (file.type && file.type.split("/")[1])
+          ? file.type.split("/")[1].toUpperCase()
+          : "IMAGE";
         fileMeta.textContent = `${w} × ${h} px  ·  ${mime}  ·  ${mb} MB`;
 
         hideStatus();
@@ -101,6 +105,7 @@
       img.onerror = () => showStatus("Could not load that image.", "error");
       img.src = ev.target.result;
     };
+    reader.onerror = () => showStatus("Could not read that file.", "error");
     reader.readAsDataURL(file);
   });
 
@@ -190,7 +195,6 @@
         const opt = document.createElement("option");
         opt.value = m.id;
 
-        // Pricing hint
         let priceHint = "";
         if (m.pricing && m.pricing.prompt !== undefined) {
           const p = parseFloat(m.pricing.prompt);
@@ -225,7 +229,7 @@
     } catch (e) {
       console.warn("Model fetch failed:", e);
       modelList.innerHTML = '<option value="">Failed to load — check connection</option>';
-      showStatus("Could not load model list. Check your internet connection.", "error");
+      showStatus("Could not load model list. " + (e.message || "Check your connection."), "error");
     } finally {
       btnRefreshModels.textContent = btnLabel;
       btnRefreshModels.disabled = false;
@@ -344,7 +348,6 @@
     manifestPreview.textContent = "Analysing image… this can take 10–60 seconds depending on the model.";
 
     try {
-      // Downscale for API — max 1536 long edge, JPEG quality 0.85
       const dataUrl = await downscaleImage(sourceImage, 1536, 0.85);
 
       showStatus("Sending to " + prettyModelName(currentModel) + "…", "");
@@ -364,13 +367,13 @@
         ]
       };
 
+      // FIX: removed custom headers — some Android browsers block fetches
+      // with extra headers on CORS preflight.
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": "Bearer " + key,
-          "Content-Type": "application/json",
-          "HTTP-Referer": location.origin || "https://github.com",
-          "X-Title": "Blueprint Generator"
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload)
       });
@@ -396,7 +399,6 @@
 
       blueprintText = text.trim();
 
-      // Prepend our own header block, filled with real specs
       const finalText = buildFinalManifest(blueprintText);
       manifestPreview.textContent = finalText;
 
@@ -454,7 +456,9 @@
     const h = sourceImage ? sourceImage.naturalHeight : 0;
     const fname = sourceFile ? sourceFile.name : "unknown";
     const fsize = sourceFile ? (sourceFile.size / 1024 / 1024).toFixed(2) + " MB" : "unknown";
-    const ftype = sourceFile ? ((sourceFile.type.split("/")[1] || "").toUpperCase()) : "unknown";
+    const ftype = (sourceFile && sourceFile.type && sourceFile.type.split("/")[1])
+      ? sourceFile.type.split("/")[1].toUpperCase()
+      : "IMAGE";
 
     const pad = (label, value) => {
       while (label.length < 16) label += " ";
@@ -476,9 +480,6 @@
       ""
     ].join("\n");
 
-    // Clean AI text — strip any leading duplicate header block if the model
-    // happened to output one anyway. We look for "1. IMAGE SPECIFICATIONS"
-    // and cut everything before it.
     let body = aiText;
     const idx = body.indexOf("1. IMAGE SPECIFICATIONS");
     if (idx > 0) body = body.slice(idx);
@@ -501,7 +502,6 @@
 
   function prettyModelName(id) {
     if (!id) return "unknown";
-    // Just take what's after the slash, clean it up
     const parts = id.split("/");
     const name = parts[parts.length - 1] || id;
     return name
@@ -575,14 +575,9 @@
      ======================================================================= */
   function init() {
     loadKey();
-    // Try to restore previously picked model name display
     try {
       const saved = localStorage.getItem(MODEL_STORAGE);
-      if (saved) {
-        currentModel = saved;
-        // We can't add the option until the list is fetched, but we can
-        // remember it in state so it auto-selects once Refresh Models runs
-      }
+      if (saved) currentModel = saved;
     } catch (e) {}
   }
 
