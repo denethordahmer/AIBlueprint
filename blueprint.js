@@ -3,8 +3,9 @@
    Upload an image → OpenRouter vision model analyses it → produces a
    structured text blueprint → save as .txt.
 
-   v2: model list with server-side vision filter, pricing filter,
-   provider filter, model count.
+   v3: adds a "Measured Colour Palette" section (section 9) generated
+   locally from actual image pixels, appended after the AI content.
+   AI's own colour description (section 5) is preserved unchanged.
 
    The API key lives in localStorage on this device only.
    ========================================================================= */
@@ -53,6 +54,7 @@
 
   let allVisionModels = [];
   let savedModelId = "";
+  let measuredPalette = [];   // populated at upload time
 
   const KEY_STORAGE = "blueprint_openrouter_key";
   const MODEL_STORAGE = "blueprint_openrouter_model";
@@ -70,6 +72,118 @@
   function hideStatus() {
     analyseStatus.classList.add("hidden");
     analyseStatus.textContent = "";
+  }
+
+  /* =======================================================================
+     COLOUR PALETTE EXTRACTION — pure client-side, no AI
+     Samples the image on an offscreen canvas, quantises pixels to group
+     near-identical colours, counts frequency, returns top N.
+     ======================================================================= */
+  function extractPalette(img, maxColors) {
+    const maxEdge = 200; // small enough to be fast, big enough for accuracy
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const scale = Math.min(1, maxEdge / Math.max(w, h));
+    const tw = Math.max(1, Math.round(w * scale));
+    const th = Math.max(1, Math.round(h * scale));
+
+    const c = document.createElement("canvas");
+    c.width = tw;
+    c.height = th;
+    const cx = c.getContext("2d", { willReadFrequently: true });
+    cx.drawImage(img, 0, 0, tw, th);
+
+    let data;
+    try {
+      data = cx.getImageData(0, 0, tw, th).data;
+    } catch (e) {
+      // Canvas tainted or blocked — return empty gracefully
+      return [];
+    }
+
+    const counts = new Map();
+    const quantize = 24; // channel bucket size — groups similar tones
+
+    for (let i = 0; i < data.length; i += 4) {
+      const a = data[i + 3];
+      if (a < 128) continue; // skip transparent pixels
+
+      let r = data[i];
+      let g = data[i + 1];
+      let b = data[i + 2];
+
+      // Quantise
+      r = Math.min(255, Math.round(r / quantize) * quantize);
+      g = Math.min(255, Math.round(g / quantize) * quantize);
+      b = Math.min(255, Math.round(b / quantize) * quantize);
+
+      const key = r + "," + g + "," + b;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+
+    const totalSampled = tw * th;
+    const entries = Array.from(counts.entries())
+      .map(([key, count]) => {
+        const parts = key.split(",");
+        return {
+          r: Number(parts[0]),
+          g: Number(parts[1]),
+          b: Number(parts[2]),
+          count: count,
+          percent: (count / totalSampled) * 100
+        };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, maxColors);
+
+    return entries;
+  }
+
+  function toHex(r, g, b) {
+    const h = (v) => {
+      const s = Math.max(0, Math.min(255, v)).toString(16);
+      return s.length === 1 ? "0" + s : s;
+    };
+    return "#" + (h(r) + h(g) + h(b)).toUpperCase();
+  }
+
+  function padRight(str, n) {
+    str = String(str);
+    while (str.length < n) str += " ";
+    return str;
+  }
+
+  function buildPaletteSection(palette) {
+    const hr2 = "-".repeat(64);
+    const lines = [];
+    lines.push(hr2);
+    lines.push("  9. MEASURED COLOUR PALETTE");
+    lines.push(hr2);
+    lines.push("  Extracted directly from image pixels — not AI-generated.");
+    lines.push("  Top colours by coverage after grouping similar tones.");
+    lines.push("");
+
+    if (!palette || palette.length === 0) {
+      lines.push("  No palette could be extracted.");
+      lines.push("");
+      return lines.join("\n");
+    }
+
+    lines.push("  " + padRight("Rank", 6) + padRight("Hex", 10) +
+               padRight("RGB", 22) + "Coverage");
+    lines.push("  " + padRight("----", 6) + padRight("-------", 10) +
+               padRight("-------------------", 22) + "--------");
+
+    palette.forEach((entry, i) => {
+      const hex = toHex(entry.r, entry.g, entry.b);
+      const rgbStr = `rgb(${entry.r}, ${entry.g}, ${entry.b})`;
+      const pct = entry.percent.toFixed(2) + "%";
+      lines.push("  " + padRight((i + 1), 6) + padRight(hex, 10) +
+                 padRight(rgbStr, 22) + pct);
+    });
+
+    lines.push("");
+    return lines.join("\n");
   }
 
   /* =======================================================================
@@ -105,6 +219,13 @@
           ? file.type.split("/")[1].toUpperCase()
           : "IMAGE";
         fileMeta.textContent = `${w} × ${h} px  ·  ${mime}  ·  ${mb} MB`;
+
+        // Extract the palette now, ready for the next analysis
+        try {
+          measuredPalette = extractPalette(img, 10);
+        } catch (err) {
+          measuredPalette = [];
+        }
 
         hideStatus();
       };
@@ -158,7 +279,7 @@
   });
 
   /* =======================================================================
-     MODEL LIST — fetch, filter, populate
+     MODEL LIST
      ======================================================================= */
   function isFreeModel(m) {
     const p = m.pricing || {};
@@ -405,9 +526,7 @@
       "  A single comprehensive paragraph that lets a blind reader fully " +
       "imagine the scene. This is the most important section. Do not " +
       "reference 'the image' — describe the scene as if narrating reality.\n\n" +
-      "[equals line]\n" +
-      "  END OF MANIFEST\n" +
-      "[equals line]";
+      "Do NOT number any further sections. Stop after section 8.";
 
     let lengthInstruction = "";
     if (detail === "standard") {
@@ -576,24 +695,42 @@
       ""
     ].join("\n");
 
+    // Strip AI's leading header if it echoed one
     let body = aiText;
-    const idx = body.indexOf("1. IMAGE SPECIFICATIONS");
-    if (idx > 0) body = body.slice(idx);
+    const startIdx = body.indexOf("1. IMAGE SPECIFICATIONS");
+    if (startIdx > 0) body = body.slice(startIdx);
+
+    // Strip AI's own trailing "END OF MANIFEST" block if it added one
+    const endIdx = body.lastIndexOf("END OF MANIFEST");
+    if (endIdx > 0) {
+      const before = body.slice(0, endIdx);
+      // Remove any trailing separator line(s) and whitespace
+      body = before.replace(/[\s\n]*[=\-]{5,}[\s\n]*$/, "").trimEnd();
+    } else {
+      body = body.trimEnd();
+    }
+
+    // Measured palette — generated locally from image pixels
+    const paletteSection = buildPaletteSection(measuredPalette);
 
     const footer = [
       "",
-      hr2,
+      hr,
       "  END OF MANIFEST",
-      hr2,
+      hr,
       "",
       "This document was generated from an image by an AI vision model.",
+      "Section 9 (Measured Colour Palette) was extracted directly from",
+      "image pixels, not generated by AI. All other sections were produced",
+      "by the model named above.",
+      "",
       "All measurements are expressed in the source image's native pixel",
       "grid with origin at the top-left corner (x increases rightwards,",
       "y increases downwards). Percentages are relative to the full frame.",
       ""
     ].join("\n");
 
-    return header + body + footer;
+    return header + body + "\n\n" + paletteSection + "\n" + footer;
   }
 
   function prettyModelName(id) {
@@ -657,6 +794,7 @@
     sourceImage = null;
     sourceFile = null;
     blueprintText = "";
+    measuredPalette = [];
     previewImg.removeAttribute("src");
     previewWrap.classList.add("hidden");
     emptyState.classList.remove("hidden");
