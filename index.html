@@ -50,6 +50,22 @@
         </div>
 
         <div class="fieldRow">
+          <label for="pricingFilter">Pricing</label>
+          <select id="pricingFilter">
+            <option value="all" selected>All</option>
+            <option value="free">Free only</option>
+            <option value="paid">Paid only</option>
+          </select>
+        </div>
+
+        <div class="fieldRow">
+          <label for="providerFilter">Provider</label>
+          <select id="providerFilter">
+            <option value="all" selected>All providers</option>
+          </select>
+        </div>
+
+        <div class="fieldRow">
           <label for="modelList">Vision Model</label>
           <select id="modelList">
             <option value="">Tap Refresh Models</option>
@@ -63,6 +79,11 @@
             <option value="high">High (longer, more precise)</option>
             <option value="exhaustive">Exhaustive (very long)</option>
           </select>
+        </div>
+
+        <div class="fieldRow">
+          <label>Model count</label>
+          <span id="modelCount" class="inlineValue">0</span>
         </div>
       </div>
 
