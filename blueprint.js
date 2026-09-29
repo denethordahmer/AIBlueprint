@@ -3,7 +3,9 @@
    Upload an image → OpenRouter vision model analyses it → produces a
    structured text blueprint → save as .txt.
 
-   No canvas. No drawing. No image export.
+   v2: model list with server-side vision filter, pricing filter,
+   provider filter, model count.
+
    The API key lives in localStorage on this device only.
    ========================================================================= */
 
@@ -25,8 +27,11 @@
   const btnSaveKey        = document.getElementById("btnSaveKey");
   const btnClearKey       = document.getElementById("btnClearKey");
   const btnRefreshModels  = document.getElementById("btnRefreshModels");
+  const pricingFilter     = document.getElementById("pricingFilter");
+  const providerFilter    = document.getElementById("providerFilter");
   const modelList         = document.getElementById("modelList");
   const detailLevel       = document.getElementById("detailLevel");
+  const modelCount        = document.getElementById("modelCount");
 
   const btnAnalyse        = document.getElementById("btnAnalyse");
   const analyseStatus     = document.getElementById("analyseStatus");
@@ -41,10 +46,13 @@
   /* =======================================================================
      STATE
      ======================================================================= */
-  let sourceImage = null;   // HTMLImageElement
-  let sourceFile  = null;   // File object
-  let currentModel = "";    // currently selected model id
-  let blueprintText = "";   // final text output
+  let sourceImage = null;
+  let sourceFile  = null;
+  let currentModel = "";
+  let blueprintText = "";
+
+  let allVisionModels = [];
+  let savedModelId = "";
 
   const KEY_STORAGE = "blueprint_openrouter_key";
   const MODEL_STORAGE = "blueprint_openrouter_model";
@@ -75,8 +83,6 @@
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    // FIX: Android often reports empty file.type — only reject if it's
-    // non-empty AND not an image.
     if (file.type && !file.type.startsWith("image/")) {
       showStatus("That file is not an image.", "error");
       return;
@@ -142,27 +148,150 @@
     if (!confirm("Remove saved API key from this device?")) return;
     try { localStorage.removeItem(KEY_STORAGE); } catch (e) {}
     openrouterKey.value = "";
+    allVisionModels = [];
     modelList.innerHTML = '<option value="">Tap Refresh Models</option>';
+    providerFilter.innerHTML = '<option value="all" selected>All providers</option>';
     currentModel = "";
+    updateModelCount(0);
     showStatus("Key cleared.", "success");
     setTimeout(hideStatus, 1500);
   });
 
   /* =======================================================================
-     MODEL LIST — vision models only
+     MODEL LIST — fetch, filter, populate
      ======================================================================= */
+  function isFreeModel(m) {
+    const p = m.pricing || {};
+    const promptPrice = parseFloat(p.prompt || 0);
+    const completionPrice = parseFloat(p.completion || 0);
+    return promptPrice === 0 && completionPrice === 0;
+  }
+
+  function getProviderName(m) {
+    if (m.id && m.id.includes("/")) {
+      const prefix = m.id.split("/")[0];
+      return prefix
+        .replace(/[-_]/g, " ")
+        .split(" ")
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    }
+    return "Other";
+  }
+
+  function updateModelCount(n) {
+    if (modelCount) modelCount.textContent = String(n);
+  }
+
+  function rebuildModelDropdown() {
+    const pricingMode = pricingFilter.value;
+    const providerMode = providerFilter.value;
+
+    let filtered = allVisionModels.slice();
+
+    if (pricingMode === "free") {
+      filtered = filtered.filter(m => isFreeModel(m));
+    } else if (pricingMode === "paid") {
+      filtered = filtered.filter(m => !isFreeModel(m));
+    }
+
+    if (providerMode !== "all") {
+      filtered = filtered.filter(m => getProviderName(m) === providerMode);
+    }
+
+    filtered.sort((a, b) => {
+      const fa = isFreeModel(a) ? 0 : 1;
+      const fb = isFreeModel(b) ? 0 : 1;
+      if (fa !== fb) return fa - fb;
+      return (a.name || "").localeCompare(b.name || "");
+    });
+
+    updateModelCount(filtered.length);
+
+    const frag = document.createDocumentFragment();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = filtered.length
+      ? `Select a model (${filtered.length} shown)`
+      : "No models match filters";
+    frag.appendChild(placeholder);
+
+    let restoreId = null;
+
+    for (const m of filtered) {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+
+      let priceHint = "";
+      const p = m.pricing || {};
+      const promptPrice = parseFloat(p.prompt || 0);
+      if (isFreeModel(m)) {
+        priceHint = " — free";
+      } else if (promptPrice > 0) {
+        const perM = (promptPrice * 1000000).toFixed(2);
+        priceHint = ` — $${perM}/M in`;
+      }
+
+      opt.textContent = (m.name || m.id) + priceHint;
+      frag.appendChild(opt);
+
+      if (m.id === savedModelId || m.id === currentModel) {
+        restoreId = m.id;
+      }
+    }
+
+    modelList.innerHTML = "";
+    modelList.appendChild(frag);
+
+    if (restoreId) {
+      modelList.value = restoreId;
+      currentModel = restoreId;
+    } else {
+      currentModel = "";
+    }
+  }
+
+  function populateProviderFilter() {
+    const set = new Set();
+    for (const m of allVisionModels) {
+      set.add(getProviderName(m));
+    }
+
+    const providers = Array.from(set).sort((a, b) => a.localeCompare(b));
+    const current = providerFilter.value || "all";
+
+    providerFilter.innerHTML = "";
+    const allOpt = document.createElement("option");
+    allOpt.value = "all";
+    allOpt.textContent = "All providers";
+    providerFilter.appendChild(allOpt);
+
+    for (const prov of providers) {
+      const opt = document.createElement("option");
+      opt.value = prov;
+      opt.textContent = prov;
+      providerFilter.appendChild(opt);
+    }
+
+    if (current && providers.includes(current)) {
+      providerFilter.value = current;
+    } else {
+      providerFilter.value = "all";
+    }
+  }
+
   btnRefreshModels.addEventListener("click", async () => {
     const btnLabel = btnRefreshModels.textContent;
     btnRefreshModels.textContent = "Loading…";
     btnRefreshModels.disabled = true;
 
     try {
-      const res = await fetch("https://openrouter.ai/api/v1/models");
+      const url = "https://openrouter.ai/api/v1/models?input_modalities=image";
+      const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const json = await res.json();
       const models = json.data || [];
 
-      // Vision-only filter
       const visionModels = models.filter(m => {
         const arch = m.architecture || {};
         const im = arch.input_modalities || [];
@@ -170,65 +299,25 @@
       });
 
       if (visionModels.length === 0) {
+        allVisionModels = [];
         modelList.innerHTML = '<option value="">No vision models found</option>';
-        showStatus("No vision-capable models on OpenRouter right now.", "error");
+        updateModelCount(0);
+        showStatus("No vision-capable models returned.", "error");
         return;
       }
 
-      // Sort: free first, then alphabetical
-      visionModels.sort((a, b) => {
-        const pa = parseFloat((a.pricing && a.pricing.prompt) || 0);
-        const pb = parseFloat((b.pricing && b.pricing.prompt) || 0);
-        const fa = pa === 0 ? 0 : 1;
-        const fb = pb === 0 ? 0 : 1;
-        if (fa !== fb) return fa - fb;
-        return (a.name || "").localeCompare(b.name || "");
-      });
+      allVisionModels = visionModels;
 
-      const frag = document.createDocumentFragment();
-      const placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = `Select a model (${visionModels.length} vision models)`;
-      frag.appendChild(placeholder);
-
-      for (const m of visionModels) {
-        const opt = document.createElement("option");
-        opt.value = m.id;
-
-        let priceHint = "";
-        if (m.pricing && m.pricing.prompt !== undefined) {
-          const p = parseFloat(m.pricing.prompt);
-          if (p === 0) {
-            priceHint = " — free";
-          } else {
-            const perM = (p * 1000000).toFixed(2);
-            priceHint = ` — $${perM}/M in`;
-          }
-        }
-        opt.textContent = (m.name || m.id) + priceHint;
-        frag.appendChild(opt);
-      }
-
-      modelList.innerHTML = "";
-      modelList.appendChild(frag);
-
-      // Restore previously selected model if still available
-      try {
-        const savedModel = localStorage.getItem(MODEL_STORAGE);
-        if (savedModel) {
-          const exists = visionModels.some(m => m.id === savedModel);
-          if (exists) {
-            modelList.value = savedModel;
-            currentModel = savedModel;
-          }
-        }
-      } catch (e) {}
+      populateProviderFilter();
+      rebuildModelDropdown();
 
       showStatus(`${visionModels.length} vision models loaded.`, "success");
-      setTimeout(hideStatus, 2000);
+      setTimeout(hideStatus, 2200);
     } catch (e) {
       console.warn("Model fetch failed:", e);
+      allVisionModels = [];
       modelList.innerHTML = '<option value="">Failed to load — check connection</option>';
+      updateModelCount(0);
       showStatus("Could not load model list. " + (e.message || "Check your connection."), "error");
     } finally {
       btnRefreshModels.textContent = btnLabel;
@@ -236,8 +325,17 @@
     }
   });
 
+  pricingFilter.addEventListener("change", () => {
+    if (allVisionModels.length) rebuildModelDropdown();
+  });
+
+  providerFilter.addEventListener("change", () => {
+    if (allVisionModels.length) rebuildModelDropdown();
+  });
+
   modelList.addEventListener("change", () => {
     currentModel = modelList.value;
+    savedModelId = currentModel;
     if (currentModel) {
       try { localStorage.setItem(MODEL_STORAGE, currentModel); } catch (e) {}
     }
@@ -367,8 +465,6 @@
         ]
       };
 
-      // FIX: removed custom headers — some Android browsers block fetches
-      // with extra headers on CORS preflight.
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -438,7 +534,7 @@
   }
 
   /* =======================================================================
-     BUILD FINAL MANIFEST — wraps AI text with our own header
+     BUILD FINAL MANIFEST
      ======================================================================= */
   function buildFinalManifest(aiText) {
     const hr  = "=".repeat(64);
@@ -577,7 +673,10 @@
     loadKey();
     try {
       const saved = localStorage.getItem(MODEL_STORAGE);
-      if (saved) currentModel = saved;
+      if (saved) {
+        savedModelId = saved;
+        currentModel = saved;
+      }
     } catch (e) {}
   }
 
